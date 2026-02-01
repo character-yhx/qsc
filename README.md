@@ -3,12 +3,12 @@
 
 In this code, we implement using three neural networks to solve the quantum state classification problem. The dataset preparation process is shown in the figure.
 
-![](C:\Users\Character\Desktop\NMI\Experiments\pics\Framework.jpg)
+![Framework](C:\Users\Character\Desktop\NMI Paper\Experiments\pics\Framework.jpg)
 
 # Three neural networks:
 The three neural networks (i.e., MLP, QNN and QCNN) tested are shown in the figure.
 
-![Method](C:\Users\Character\Desktop\NMI\Experiments\pics\Method.jpg)
+![Method](C:\Users\Character\Desktop\NMI Paper\Experiments\pics\Method.jpg)
 
 ## Getting started
 
