@@ -1,0 +1,12 @@
+numpy
+torch
+pennylane
+matplotlib
+math
+time
+os
+shutil
+random
+csv
+
+

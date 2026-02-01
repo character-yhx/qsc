@@ -1,0 +1,173 @@
+import numpy as np
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+import csv
+from time import *
+
+
+
+train_set = []
+train_set_lable = []
+test_set = []
+test_set_lable = []
+event_info = []
+state_info1 = []
+state_info2 = []
+state_info3 = []
+file = open('event1.csv')
+reader = csv.reader(file)
+for row in reader:
+    event_info.append(int(0))
+    state_info1.append(float(row[2]))
+    state_info2.append(float(row[3]))
+    state_info3.append(float(row[4]))
+file = open('event2.csv')
+reader = csv.reader(file)
+for row in reader:
+    event_info.append(int(1))
+    state_info1.append(float(row[2]))
+    state_info2.append(float(row[3]))
+    state_info3.append(float(row[4]))
+file = open('event3.csv')
+reader = csv.reader(file)
+for row in reader:
+    event_info.append(int(2))
+    state_info1.append(float(row[2]))
+    state_info2.append(float(row[3]))
+    state_info3.append(float(row[4]))
+file = open('event4.csv')
+reader = csv.reader(file)
+for row in reader:
+    event_info.append(int(3))
+    state_info1.append(float(row[2]))
+    state_info2.append(float(row[3]))
+    state_info3.append(float(row[4]))
+state_info_all = []
+for i in range(len(state_info1)):
+    state_info_all.append([state_info1[i], state_info3[i], 1])
+
+
+
+train_set = state_info_all[0:2400] + \
+            state_info_all[3000:5400] + \
+            state_info_all[6000:8400] + \
+            state_info_all[9000:11400]
+train_set_lable = event_info[0:2400] + \
+                  event_info[3000:5400] + \
+                  event_info[6000:8400] + \
+                  event_info[9000:11400]
+test_set = state_info_all[2400:3000] + \
+            state_info_all[5400:6000] + \
+            state_info_all[8400:9000] + \
+            state_info_all[11400:12000]
+test_set_lable = event_info[2400:3000] + \
+                  event_info[5400:6000] + \
+                  event_info[8400:9000] + \
+                  event_info[11400:12000]
+train_set = Variable(torch.Tensor(train_set).float())
+train_set_lable = Variable(torch.Tensor(train_set_lable).long())
+test_set = Variable(torch.Tensor(test_set).float())
+test_set_lable = Variable(torch.Tensor(test_set_lable).long())
+
+def one_hot_embedding(labels, num_classes):
+    y = torch.eye(num_classes)
+    return y[labels]
+
+train_set_lable_onehot = train_set_lable
+test_set_lable_onehot = test_set_lable
+
+class MLP(nn.Module):
+    def __init__(self, hidden_size):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(3, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, 4)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, X):
+        X = F.relu(self.fc1(X))
+        X = self.fc2(X)
+        return X
+
+run_num = 10
+total_episode = 10000
+layer_num = 3
+hidden_size = 3
+time_runs = []
+train_loss_runs = []
+train_acc_runs = []
+test_loss_runs = []
+test_acc_runs = []
+for run in range(run_num):
+    MLP_only = open(f'1qubit_target1_four_xz_MLP_episode{total_episode}_run{run+1}_训练loss_训练acc_测试loss_测试acc_时间.csv', 'w')
+    writer_data = csv.writer(MLP_only)
+    starttime = time()
+    net = MLP(hidden_size)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.05)
+    time_record, train_loss_record, test_loss_record, train_record, test_record = [], [], [], [], []
+
+    for episode in range(total_episode):
+        optimizer.zero_grad()
+        out = net(train_set)
+        train_loss = criterion(out, train_set_lable_onehot)
+        train_loss.backward()
+        optimizer.step()
+
+        if episode % 1 == 0:
+            with torch.no_grad():
+                predict_train = net(train_set)
+                _, predict_train_y = torch.max(predict_train, 1)
+                correct_train = (predict_train_y == train_set_lable).sum().item()
+                predict_test = net(test_set)
+                test_loss = criterion(predict_test, test_set_lable_onehot)
+                _, predict_test_y = torch.max(predict_test, 1)
+                correct_test = (predict_test_y == test_set_lable).sum().item()
+            endtime = time()
+            cost_time = (endtime - starttime)
+            print(f'1qubit_target1_four_xz_MLP, 回合 %d, 训练 loss %f, 训练 acc %f, 测试 loss %f, 测试 acc %f, 时间 %fs' % (episode, train_loss.data, correct_train / len(train_set_lable), test_loss.data, correct_test / len(test_set_lable), cost_time))
+            time_record.append(cost_time)
+            train_loss_record.append(train_loss.data.numpy())
+            train_record.append(correct_train / len(train_set_lable))
+            test_loss_record.append(test_loss.data.numpy())
+            test_record.append(correct_test / len(test_set_lable))
+
+
+            data = [train_loss.data.numpy(), correct_train / len(train_set_lable), test_loss.data.numpy(), correct_test / len(test_set_lable), cost_time]
+            writer_data.writerow(data)
+            if episode == total_episode-1:
+                MLP_only.close()
+                time_runs.append(time_record)
+                train_loss_runs.append(train_loss_record)
+                train_acc_runs.append(train_record)
+                test_loss_runs.append(test_loss_record)
+                test_acc_runs.append(test_record)
+
+
+    if not os.path.exists('learned_model/'):
+        os.mkdir('learned_model/')
+    model_path = 'learned_model/'
+    if not os.path.exists(model_path):
+        os.mkdir(model_path)
+    torch.save(net.state_dict(), model_path + f'1qubit_target1_four_xz_MLP_episode{total_episode}_run{run+1}_model.pth')
+    net.load_state_dict(torch.load(model_path + f'1qubit_target1_four_xz_MLP_episode{total_episode}_run{run+1}_model.pth'))
+
+
+time_runs = np.transpose(time_runs)
+train_loss_runs = np.transpose(train_loss_runs)
+train_acc_runs = np.transpose(train_acc_runs)
+test_loss_runs = np.transpose(test_loss_runs)
+test_acc_runs = np.transpose(test_acc_runs)
+
+np.savetxt(f'1qubit_target1_four_xz_MLP_episode{total_episode}_{run_num}runs_时间.csv', time_runs, delimiter=',', fmt='%1.8f')
+np.savetxt(f'1qubit_target1_four_xz_MLP_episode{total_episode}_{run_num}runs_训练loss.csv', train_loss_runs, delimiter=',', fmt='%1.8f')
+np.savetxt(f'1qubit_target1_four_xz_MLP_episode{total_episode}_{run_num}runs_训练acc.csv', train_acc_runs, delimiter=',', fmt='%1.8f')
+np.savetxt(f'1qubit_target1_four_xz_MLP_episode{total_episode}_{run_num}runs_测试loss.csv', test_loss_runs, delimiter=',', fmt='%1.8f')
+np.savetxt(f'1qubit_target1_four_xz_MLP_episode{total_episode}_{run_num}runs_测试acc.csv', test_acc_runs, delimiter=',', fmt='%1.8f')
+
+
+
+
+
